@@ -18,4 +18,16 @@ export default defineConfig({
       "@": path.resolve(__dirname, "src"),
     },
   },
+  optimizeDeps: {
+    include: ['lucide-react'],
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'lucide': ['lucide-react'],
+        },
+      },
+    },
+  },
 });

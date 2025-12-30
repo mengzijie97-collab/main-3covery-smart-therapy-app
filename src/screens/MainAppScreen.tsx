@@ -1,5 +1,33 @@
 import { useState, useEffect } from 'react';
-import { Home, BarChart3, BookOpen, User, Settings, Droplet, Thermometer, Wind, Clock, Play, Zap, Activity, Shirt, Square, Link2, Signal, Plus, Heart, Trash2, Pause, X, CheckCircle2, ChevronRight, Shield, ArrowLeft, Lock, ChevronDown, ChevronUp } from 'lucide-react';
+import { 
+  Home, 
+  BarChart3, 
+  BookOpen, 
+  User, 
+  Settings, 
+  Droplet, 
+  Thermometer, 
+  Wind, 
+  Clock, 
+  Play, 
+  Zap, 
+  Activity, 
+  Shirt, 
+  Square, 
+  Link2, 
+  Plus, 
+  Heart, 
+  Trash2, 
+  Pause, 
+  X, 
+  CheckCircle2, 
+  ChevronRight, 
+  Shield, 
+  ArrowLeft, 
+  Lock, 
+  ChevronDown, 
+  ChevronUp 
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Program, SessionState, SessionRecord, ProgramSegment } from '../App';
 import LearnContent from '../components/LearnContent';
