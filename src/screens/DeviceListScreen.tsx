@@ -54,7 +54,7 @@ export default function DeviceListScreen({ onNavigate }: DeviceListScreenProps) 
                 <div className="flex items-center gap-4">
                   <div className="flex-shrink-0">
                     <img 
-                      src="https://c.animaapp.com/mjn3exopQqjBGG/img/20250806-1773.png" 
+                      src="https://c.animaapp.com/mjnxgqk9obaGxq/img/3covery-prozhu-ji-tou-ming-tu_1.png"
                       alt="3Covery Device"
                       className="w-16 h-16 object-contain"
                     />

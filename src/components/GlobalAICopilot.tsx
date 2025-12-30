@@ -20,11 +20,28 @@ export default function GlobalAICopilot({ currentView, contextData }: GlobalAICo
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Draggable state
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   // Don't render during active session
   if (currentView === 'immersive_session') {
     return null;
   }
+
+  // Initialize position on mount
+  useEffect(() => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setPosition({
+        x: window.innerWidth - rect.width - 20,
+        y: window.innerHeight - rect.height - 100,
+      });
+    }
+  }, []);
 
   const scrollToBottom = () => {
     try {
@@ -40,6 +57,56 @@ export default function GlobalAICopilot({ currentView, contextData }: GlobalAICo
       return () => clearTimeout(timer);
     }
   }, [messages.length]);
+
+  // Drag handlers
+  const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => {
+    setIsDragging(true);
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    setDragStart({
+      x: clientX - position.x,
+      y: clientY - position.y,
+    });
+  };
+
+  const handleDragMove = (e: MouseEvent | TouchEvent) => {
+    if (!isDragging) return;
+    
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    
+    const newX = clientX - dragStart.x;
+    const newY = clientY - dragStart.y;
+    
+    // Constrain to viewport
+    const maxX = window.innerWidth - (buttonRef.current?.offsetWidth || 0);
+    const maxY = window.innerHeight - (buttonRef.current?.offsetHeight || 0);
+    
+    setPosition({
+      x: Math.max(0, Math.min(newX, maxX)),
+      y: Math.max(0, Math.min(newY, maxY)),
+    });
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+  };
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleDragMove);
+      window.addEventListener('mouseup', handleDragEnd);
+      window.addEventListener('touchmove', handleDragMove);
+      window.addEventListener('touchend', handleDragEnd);
+      
+      return () => {
+        window.removeEventListener('mousemove', handleDragMove);
+        window.removeEventListener('mouseup', handleDragEnd);
+        window.removeEventListener('touchmove', handleDragMove);
+        window.removeEventListener('touchend', handleDragEnd);
+      };
+    }
+  }, [isDragging, dragStart, position]);
 
   const generateContextualResponse = (userMessage: string): string => {
     const lowerMessage = userMessage.toLowerCase();
@@ -154,27 +221,36 @@ export default function GlobalAICopilot({ currentView, contextData }: GlobalAICo
     return viewNames[view] || view;
   };
 
+  const handleButtonClick = () => {
+    if (!isDragging) {
+      setIsOpen(true);
+    }
+  };
+
   return (
     <>
-      {/* Floating Trigger Button (FAB) */}
+      {/* Draggable Floating Trigger Button (FAB) */}
       <AnimatePresence>
         {!isOpen && (
-          <motion.button
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 20 }}
-            onClick={() => setIsOpen(true)}
-            className="fixed bottom-[100px] right-5 z-50 px-4 py-3 bg-white/20 backdrop-blur-md border border-white/30 rounded-full shadow-lg hover:shadow-xl transition-all group"
+          <button
+            ref={buttonRef}
+            onMouseDown={handleDragStart}
+            onTouchStart={handleDragStart}
+            onClick={handleButtonClick}
+            className="fixed z-50 px-4 py-3 bg-white/20 backdrop-blur-md border border-white/30 rounded-full shadow-lg hover:shadow-xl transition-all group"
             style={{
-              animation: 'pulse-glow 2s ease-in-out infinite',
+              left: `${position.x}px`,
+              top: `${position.y}px`,
+              cursor: isDragging ? 'grabbing' : 'grab',
+              animation: isDragging ? 'none' : 'pulse-glow 2s ease-in-out infinite',
+              touchAction: 'none',
             }}
           >
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-primary group-hover:text-secondary transition-colors" strokeWidth={2} />
               <span className="text-sm font-semibold text-gray-900">AI Help</span>
             </div>
-          </motion.button>
+          </button>
         )}
       </AnimatePresence>
 

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Home, BarChart3, BookOpen, User, Settings, Droplet, Thermometer, Wind, Clock, Play, Zap, Activity, Shirt, Square, Link2, Signal, Plus, Heart, Trash2, Pause, X, CheckCircle2, ChevronRight, Shield, ArrowLeft, Lock } from 'lucide-react';
+import { Home, BarChart3, BookOpen, User, Settings, Droplet, Thermometer, Wind, Clock, Play, Zap, Activity, Shirt, Square, Link2, Signal, Plus, Heart, Trash2, Pause, X, CheckCircle2, ChevronRight, Shield, ArrowLeft, Lock, ChevronDown, ChevronUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Program, SessionState, SessionRecord, ProgramSegment } from '../App';
 import LearnContent from '../components/LearnContent';
 import GlobalAICopilot from '../components/GlobalAICopilot';
 import ConversionModal from '../components/ConversionModal';
+import DataContent from '../components/DataContent';
+import SessionDetailModal from '../components/SessionDetailModal';
 
 interface MainAppScreenProps {
   onNavigate: (screen: 'login' | 'pairing' | 'scanning' | 'device-list' | 'connected' | 'main-app' | 'program-detail' | 'create-routine', program?: Program) => void;
@@ -96,10 +98,10 @@ export default function MainAppScreen({
   const [manualThermalMode, setManualThermalMode] = useState<'cold' | 'heat' | 'off'>('cold');
   const [subPage, setSubPage] = useState<'main' | 'account' | 'devices' | 'preferences' | 'support' | 'feedback' | 'privacy'>('main');
   const [userName, setUserName] = useState('John Doe');
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [darkModeEnabled, setDarkModeEnabled] = useState(false);
   const [temperatureUnit, setTemperatureUnit] = useState<'C' | 'F'>('C');
-  const [soundEffectsEnabled, setSoundEffectsEnabled] = useState(true);
+  const [language, setLanguage] = useState<'en' | 'zh'>('en');
+  const [selectedSessionRecord, setSelectedSessionRecord] = useState<SessionRecord | null>(null);
+  const [liveAdjustExpanded, setLiveAdjustExpanded] = useState(true);
 
   const hasMultiChamber = connectedAccessories.some(acc => acc.chamberType === 'multi');
 
@@ -289,24 +291,49 @@ export default function MainAppScreen({
 
   // Active session view
   if (sessionState.status === 'running' || sessionState.status === 'paused') {
-    const currentTemp = sessionState.liveOverrides.temperature ?? sessionState.config.temperature;
-    const currentCompression = sessionState.liveOverrides.compressionLevel ?? sessionState.config.compressionLevel;
+    // Get current segment for program mode
+    const currentSegment = sessionState.mode === 'PROGRAM' && sessionState.config.segments && sessionState.currentSegmentIndex !== undefined
+      ? sessionState.config.segments[sessionState.currentSegmentIndex]
+      : null;
+
+    // Determine current mode based on session type
+    const currentMode = sessionState.mode === 'MANUAL' 
+      ? manualThermalMode 
+      : (currentSegment?.type === 'hot' ? 'heat' : currentSegment?.type === 'cold' ? 'cold' : 'off');
+
+    // Get current values with proper fallbacks
+    const currentTemp = sessionState.liveOverrides.temperature ?? currentSegment?.temperature ?? sessionState.config.temperature ?? 22;
+    const currentCompression = sessionState.liveOverrides.compressionLevel ?? currentSegment?.compressionLevel ?? sessionState.config.compressionLevel ?? 0;
+    const currentCompressionMode = sessionState.config.compressionMode ?? currentSegment?.compressionMode ?? 'wave';
+
+    // Determine what controls to show
+    const showTempControl = currentMode === 'cold' || currentMode === 'heat';
+    const showPressureControl = true; // Always show pressure control
 
     const getSegmentColor = (type: string) => {
       switch (type) {
         case 'hot': return 'border-orange-500 bg-orange-50';
         case 'cold': return 'border-blue-500 bg-blue-50';
-        case 'pressure': return 'border-slate-500 bg-slate-50';
+        case 'pressure': return 'border-primary/20 bg-primary/5';
         default: return 'border-gray-500 bg-gray-50';
       }
     };
 
-    const getSegmentDotColor = (type: string) => {
+    const getSegmentIcon = (type: string) => {
       switch (type) {
-        case 'hot': return 'bg-orange-500';
-        case 'cold': return 'bg-blue-500';
-        case 'pressure': return 'bg-slate-500';
-        default: return 'bg-gray-500';
+        case 'hot': return <Thermometer className="w-4 h-4 text-orange-500" strokeWidth={1.5} />;
+        case 'cold': return <Thermometer className="w-4 h-4 text-blue-500" strokeWidth={1.5} />;
+        case 'pressure': return <Wind className="w-4 h-4 text-primary" strokeWidth={1.5} />;
+        default: return <Zap className="w-4 h-4 text-gray-500" strokeWidth={1.5} />;
+      }
+    };
+
+    const getSegmentTitle = (type: string) => {
+      switch (type) {
+        case 'hot': return 'Heat';
+        case 'cold': return 'Cold';
+        case 'pressure': return 'Pressure';
+        default: return 'Unknown';
       }
     };
 
@@ -320,28 +347,73 @@ export default function MainAppScreen({
     };
 
     const getTempRangeForMode = () => {
-      if (manualThermalMode === 'cold') {
+      if (currentMode === 'cold') {
         return { min: 5, max: 15 };
-      } else if (manualThermalMode === 'heat') {
+      } else if (currentMode === 'heat') {
         return { min: 35, max: 42 };
       }
       return { min: 5, max: 42 };
     };
 
     return (
-      <div className="min-h-screen bg-white text-slate-900 flex flex-col">
+      <div className="min-h-screen bg-gradient-1 text-slate-900 flex flex-col">
         {/* Compact Header */}
-        <div className="bg-white border-b border-gray-200 px-4 py-3">
-          <div className="max-w-md mx-auto flex items-center justify-between">
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-gray-500 uppercase tracking-wide">{sessionState.mode} Session</p>
-              <h1 className="text-base font-semibold text-slate-900 truncate">{sessionState.config.programName}</h1>
-            </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold text-slate-900 tabular-nums">
-                {formatTime(sessionState.timeLeft)}
+        <div className="bg-white/95 backdrop-blur-md border-b border-gray-200/50 px-4 py-3 shadow-sm">
+          <div className="max-w-md mx-auto">
+            {/* Session Info Row */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">{sessionState.mode} Session</p>
+                <h1 className="text-base font-semibold text-slate-900 truncate">{sessionState.config.programName}</h1>
               </div>
-              <p className="text-xs text-gray-500">Time Left</p>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-slate-900 tabular-nums">
+                  {formatTime(sessionState.timeLeft)}
+                </div>
+                <p className="text-xs text-gray-500">Time Left</p>
+              </div>
+            </div>
+
+            {/* GLOBAL STATUS BAR - Matches Manual Session exactly */}
+            <div className="flex items-center gap-3 text-xs pt-2 border-t border-gray-100">
+              {/* Water Level */}
+              <div className="flex items-center gap-1">
+                <Droplet className={`w-3.5 h-3.5 ${getWaterLevelColor()}`} strokeWidth={1.5} />
+                <span className="text-gray-600 font-medium">{getWaterLevelText()}</span>
+              </div>
+
+              {/* Divider */}
+              <div className="w-px h-3 bg-gray-300"></div>
+
+              {/* Accessory */}
+              <div className="flex items-center gap-1">
+                {connectedAccessories.length > 0 ? (
+                  <>
+                    {getAccessoryIcon(connectedAccessories[0].icon)}
+                    <span className="text-gray-600 font-medium">{connectedAccessories[0].name}</span>
+                  </>
+                ) : (
+                  <span className="text-gray-400 font-medium">No Accessory</span>
+                )}
+              </div>
+
+              {/* Divider */}
+              <div className="w-px h-3 bg-gray-300"></div>
+
+              {/* Current Temperature - Real-time reading */}
+              <div className="flex items-center gap-1">
+                <Thermometer className="w-3.5 h-3.5 text-blue-500" strokeWidth={1.5} />
+                <span className="text-gray-600 font-medium">{currentTemp}°C</span>
+              </div>
+
+              {/* Divider */}
+              <div className="w-px h-3 bg-gray-300"></div>
+
+              {/* Compression - Real-time reading in mmHg */}
+              <div className="flex items-center gap-1">
+                <Wind className="w-3.5 h-3.5 text-primary" strokeWidth={1.5} />
+                <span className="text-gray-600 font-medium">{currentCompression * 25} mmHg</span>
+              </div>
             </div>
           </div>
         </div>
@@ -353,7 +425,7 @@ export default function MainAppScreen({
             {sessionState.mode === 'PROGRAM' && sessionState.config.segments && (
               <div>
                 <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Program Timeline</h3>
-                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
                   {sessionState.config.segments.map((segment, index) => {
                     const isActive = index === sessionState.currentSegmentIndex;
                     const isPast = index < (sessionState.currentSegmentIndex || 0);
@@ -361,24 +433,58 @@ export default function MainAppScreen({
                     return (
                       <div
                         key={segment.id}
-                        className={`flex-shrink-0 rounded-lg border-2 p-3 transition-all ${
+                        className={`flex-shrink-0 rounded-xl border-2 p-3 transition-all shadow-sm w-40 ${
                           isActive
-                            ? `${getSegmentColor(segment.type)} shadow-md`
+                            ? `${getSegmentColor(segment.type)} shadow-md border-2`
                             : isPast
                             ? 'border-gray-200 bg-gray-50 opacity-50'
                             : 'border-gray-200 bg-white opacity-70'
-                        } ${isActive ? 'w-48' : 'w-32'}`}
+                        }`}
                       >
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className={`w-2 h-2 rounded-full ${getSegmentDotColor(segment.type)} ${isActive ? 'animate-pulse' : ''}`}></div>
-                          <span className="text-xs font-medium text-gray-600">Step {index + 1}</span>
+                        {/* Header: Step X : Mode */}
+                        <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-200">
+                          {getSegmentIcon(segment.type)}
+                          <span className="text-xs font-semibold text-gray-900">
+                            Step {index + 1} : {getSegmentTitle(segment.type)}
+                          </span>
                         </div>
-                        <h4 className="text-sm font-semibold text-slate-900 mb-1 truncate">{segment.name}</h4>
+
+                        {/* Body: Settings Grid */}
+                        <div className="space-y-1.5 text-xs">
+                          {/* Duration */}
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-600">Duration</span>
+                            <span className="font-semibold text-gray-900">{segment.duration} min</span>
+                          </div>
+
+                          {/* Temperature (if applicable) */}
+                          {segment.temperature !== undefined && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-gray-600">Target Temp</span>
+                              <span className="font-semibold text-gray-900">{segment.temperature}°C</span>
+                            </div>
+                          )}
+
+                          {/* Pressure Level (if applicable) */}
+                          {segment.compressionLevel !== undefined && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-gray-600">Pressure</span>
+                              <span className="font-semibold text-gray-900">Level {segment.compressionLevel}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Active Indicator */}
                         {isActive && (
-                          <div className="text-xs text-gray-600 space-y-0.5">
-                            <div>{segment.duration} min</div>
-                            {segment.temperature && <div>{segment.temperature}°C</div>}
-                            {segment.compressionLevel !== undefined && <div>Level {segment.compressionLevel}</div>}
+                          <div className="mt-2 pt-2 border-t border-gray-200">
+                            <div className="flex items-center gap-1.5">
+                              <div className={`w-1.5 h-1.5 rounded-full ${
+                                segment.type === 'hot' ? 'bg-orange-500' : 
+                                segment.type === 'cold' ? 'bg-blue-500' : 
+                                'bg-primary'
+                              } animate-pulse`}></div>
+                              <span className="text-xs font-medium text-gray-700">Active</span>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -388,153 +494,168 @@ export default function MainAppScreen({
               </div>
             )}
 
-            {/* Manual Mode: Thermal Mode Switcher */}
-            {sessionState.mode === 'MANUAL' && (
-              <div>
-                <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Therapy Mode</h3>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    onClick={() => handleThermalModeSwitch('cold')}
-                    className={`p-3 rounded-lg border-2 transition-all ${
-                      manualThermalMode === 'cold'
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}
-                  >
-                    <Thermometer className="w-5 h-5 text-blue-500 mx-auto mb-1" strokeWidth={1.5} />
-                    <div className="text-xs font-semibold text-gray-900">Cold</div>
-                  </button>
-
-                  <button
-                    onClick={() => handleThermalModeSwitch('heat')}
-                    className={`p-3 rounded-lg border-2 transition-all ${
-                      manualThermalMode === 'heat'
-                        ? 'border-orange-500 bg-orange-50'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}
-                  >
-                    <Thermometer className="w-5 h-5 text-orange-500 mx-auto mb-1" strokeWidth={1.5} />
-                    <div className="text-xs font-semibold text-gray-900">Heat</div>
-                  </button>
-
-                  <button
-                    onClick={() => handleThermalModeSwitch('off')}
-                    className={`p-3 rounded-lg border-2 transition-all ${
-                      manualThermalMode === 'off'
-                        ? 'border-primary bg-primary/5'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}
-                  >
-                    <Wind className="w-5 h-5 text-primary mx-auto mb-1" strokeWidth={1.5} />
-                    <div className="text-xs font-semibold text-gray-900">Press</div>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Unified Live Adjust Controls */}
+            {/* LIVE ADJUST PANEL - Refactored with Collapse */}
             <div>
-              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Live Adjust</h3>
-              <div className="grid grid-cols-2 gap-3">
-                {/* Left Card: Thermal Control */}
-                {(sessionState.mode === 'PROGRAM' || manualThermalMode !== 'off') && currentTemp !== undefined && (
-                  <div className="bg-slate-50 rounded-lg p-4 border border-gray-200 shadow-sm">
-                    <div className="flex items-center gap-1.5 mb-3">
-                      <Thermometer 
-                        className={`w-4 h-4 ${
-                          sessionState.mode === 'MANUAL' 
-                            ? (manualThermalMode === 'cold' ? 'text-blue-500' : 'text-orange-500')
-                            : 'text-blue-500'
-                        }`} 
-                        strokeWidth={1.5} 
-                      />
-                      <span className="text-xs font-semibold text-gray-700">Temperature</span>
-                    </div>
-                    <div className={`text-3xl font-bold mb-4 ${
-                      sessionState.mode === 'MANUAL'
-                        ? (manualThermalMode === 'cold' ? 'text-blue-500' : 'text-orange-500')
-                        : 'text-blue-500'
-                    }`}>
-                      {currentTemp}°C
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          const range = getTempRangeForMode();
-                          if (currentTemp > range.min) {
-                            onUpdateLiveParameter('temperature', currentTemp - 1);
-                          }
-                        }}
-                        className="flex-1 h-11 bg-white hover:bg-gray-100 rounded-lg flex items-center justify-center transition-colors text-slate-900 font-bold text-xl border border-gray-200 shadow-sm"
-                      >
-                        −
-                      </button>
-                      <button
-                        onClick={() => {
-                          const range = getTempRangeForMode();
-                          if (currentTemp < range.max) {
-                            onUpdateLiveParameter('temperature', currentTemp + 1);
-                          }
-                        }}
-                        className="flex-1 h-11 bg-white hover:bg-gray-100 rounded-lg flex items-center justify-center transition-colors text-slate-900 font-bold text-xl border border-gray-200 shadow-sm"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Right Card: Compression Control */}
-                {currentCompression !== undefined && (
-                  <div className="bg-slate-50 rounded-lg p-4 border border-gray-200 shadow-sm">
-                    <div className="flex items-center gap-1.5 mb-3">
-                      <Wind className="w-4 h-4 text-primary" strokeWidth={1.5} />
-                      <span className="text-xs font-semibold text-gray-700">Pressure</span>
-                    </div>
-                    <div className="text-3xl font-bold text-primary mb-4">
-                      {currentCompression === 0 ? 'Off' : `Level ${currentCompression}`}
-                    </div>
-                    <div className={`grid ${sessionState.mode === 'MANUAL' ? 'grid-cols-5' : 'grid-cols-4'} gap-1`}>
-                      {sessionState.mode === 'MANUAL' && (
-                        <button
-                          onClick={() => onUpdateLiveParameter('compressionLevel', 0)}
-                          className={`h-11 rounded border-2 transition-all text-xs font-bold ${
-                            currentCompression === 0
-                              ? 'border-gray-400 bg-gray-400 text-white'
-                              : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                          }`}
-                        >
-                          Off
-                        </button>
-                      )}
-                      {[1, 2, 3, 4].map((level) => (
-                        <button
-                          key={level}
-                          onClick={() => onUpdateLiveParameter('compressionLevel', level)}
-                          className={`h-11 rounded border-2 transition-all text-xs font-bold ${
-                            currentCompression === level
-                              ? 'border-primary bg-primary text-white'
-                              : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                          }`}
-                        >
-                          {level}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Live Adjust</h3>
+                <button
+                  onClick={() => setLiveAdjustExpanded(!liveAdjustExpanded)}
+                  className="p-1 hover:bg-gray-100 rounded transition-colors"
+                >
+                  {liveAdjustExpanded ? (
+                    <ChevronUp className="w-4 h-4 text-gray-600" strokeWidth={2} />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-gray-600" strokeWidth={2} />
+                  )}
+                </button>
               </div>
+
+              {liveAdjustExpanded && (
+                <div className="space-y-3">
+                  {/* Scenario A: Manual Session - Show Mode Switcher */}
+                  {sessionState.mode === 'MANUAL' && (
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        onClick={() => handleThermalModeSwitch('cold')}
+                        className={`p-3 rounded-xl border-2 transition-all shadow-sm ${
+                          manualThermalMode === 'cold'
+                            ? 'border-blue-500 bg-blue-50 shadow-md'
+                            : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+                        }`}
+                      >
+                        <Thermometer className="w-5 h-5 text-blue-500 mx-auto mb-1" strokeWidth={1.5} />
+                        <div className="text-xs font-semibold text-gray-900">Cold</div>
+                      </button>
+
+                      <button
+                        onClick={() => handleThermalModeSwitch('heat')}
+                        className={`p-3 rounded-xl border-2 transition-all shadow-sm ${
+                          manualThermalMode === 'heat'
+                            ? 'border-orange-500 bg-orange-50 shadow-md'
+                            : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+                        }`}
+                      >
+                        <Thermometer className="w-5 h-5 text-orange-500 mx-auto mb-1" strokeWidth={1.5} />
+                        <div className="text-xs font-semibold text-gray-900">Heat</div>
+                      </button>
+
+                      <button
+                        onClick={() => handleThermalModeSwitch('off')}
+                        className={`p-3 rounded-xl border-2 transition-all shadow-sm ${
+                          manualThermalMode === 'off'
+                            ? 'border-primary bg-primary/5 shadow-md'
+                            : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+                        }`}
+                      >
+                        <Wind className="w-5 h-5 text-primary mx-auto mb-1" strokeWidth={1.5} />
+                        <div className="text-xs font-semibold text-gray-900">Press</div>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Control Cards - Context Aware */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Temperature Card - Show if mode is cold/heat OR force render if undefined */}
+                    {(showTempControl || currentMode === undefined) && (
+                      <div className="bg-card-subtle rounded-xl p-4 border border-gray-200/50 shadow-lg">
+                        <div className="flex items-center gap-1.5 mb-3">
+                          <Thermometer 
+                            className={`w-4 h-4 ${
+                              currentMode === 'cold' ? 'text-blue-500' : 
+                              currentMode === 'heat' ? 'text-orange-500' : 
+                              'text-gray-500'
+                            }`} 
+                            strokeWidth={1.5} 
+                          />
+                          <span className="text-xs font-semibold text-gray-700">Temperature</span>
+                        </div>
+                        <div className={`text-3xl font-bold mb-4 ${
+                          currentMode === 'cold' ? 'text-blue-500' : 
+                          currentMode === 'heat' ? 'text-orange-500' : 
+                          'text-gray-500'
+                        }`}>
+                          {currentTemp}°C
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              const range = getTempRangeForMode();
+                              if (currentTemp > range.min) {
+                                onUpdateLiveParameter('temperature', currentTemp - 1);
+                              }
+                            }}
+                            className="flex-1 h-11 bg-button-secondary hover:bg-gray-100 rounded-lg flex items-center justify-center transition-colors text-slate-900 font-bold text-xl border border-gray-200/50 shadow-sm hover:shadow-md"
+                          >
+                            −
+                          </button>
+                          <button
+                            onClick={() => {
+                              const range = getTempRangeForMode();
+                              if (currentTemp < range.max) {
+                                onUpdateLiveParameter('temperature', currentTemp + 1);
+                              }
+                            }}
+                            className="flex-1 h-11 bg-button-secondary hover:bg-gray-100 rounded-lg flex items-center justify-center transition-colors text-slate-900 font-bold text-xl border border-gray-200/50 shadow-sm hover:shadow-md"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Pressure Card - Always show OR force render if undefined */}
+                    {(showPressureControl || currentMode === undefined) && (
+                      <div className="bg-card-subtle rounded-xl p-4 border border-gray-200/50 shadow-lg">
+                        <div className="flex items-center gap-1.5 mb-3">
+                          <Wind className="w-4 h-4 text-primary" strokeWidth={1.5} />
+                          <span className="text-xs font-semibold text-gray-700">Pressure</span>
+                        </div>
+                        <div className="text-3xl font-bold text-primary mb-4">
+                          {currentCompression === 0 ? 'Off' : `Level ${currentCompression}`}
+                        </div>
+                        <div className={`grid ${sessionState.mode === 'MANUAL' ? 'grid-cols-5' : 'grid-cols-4'} gap-1`}>
+                          {sessionState.mode === 'MANUAL' && (
+                            <button
+                              onClick={() => onUpdateLiveParameter('compressionLevel', 0)}
+                              className={`h-11 rounded-lg border-2 transition-all text-xs font-bold shadow-sm hover:shadow-md ${
+                                currentCompression === 0
+                                  ? 'border-gray-400 bg-gray-400 text-white'
+                                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                              }`}
+                            >
+                              Off
+                            </button>
+                          )}
+                          {[1, 2, 3, 4].map((level) => (
+                            <button
+                              key={level}
+                              onClick={() => onUpdateLiveParameter('compressionLevel', level)}
+                              className={`h-11 rounded-lg border-2 transition-all text-xs font-bold shadow-sm hover:shadow-md ${
+                                currentCompression === level
+                                  ? 'border-primary bg-primary text-white'
+                                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                              }`}
+                            >
+                              {level}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         {/* Footer Actions - Side by Side */}
-        <div className="bg-white border-t border-gray-200 p-4">
+        <div className="bg-white/95 backdrop-blur-md border-t border-gray-200/50 p-4 shadow-lg">
           <div className="max-w-md mx-auto grid grid-cols-2 gap-3">
             {sessionState.status === 'running' ? (
               <button
                 onClick={onPauseSession}
-                className="bg-gray-100 hover:bg-gray-200 text-slate-900 py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 border border-gray-300"
+                className="bg-button-secondary hover:bg-gray-200 text-slate-900 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 border border-gray-300/50 shadow-md hover:shadow-lg"
               >
                 <Pause className="w-4 h-4" strokeWidth={2} />
                 Pause
@@ -542,7 +663,7 @@ export default function MainAppScreen({
             ) : (
               <button
                 onClick={onResumeSession}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2"
+                className="bg-button-primary hover:opacity-90 text-primary-foreground py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
               >
                 <Play className="w-4 h-4" strokeWidth={2} />
                 Resume
@@ -550,9 +671,10 @@ export default function MainAppScreen({
             )}
             <button
               onClick={() => onStopSession(false)}
-              className="bg-red-500 hover:bg-red-600 text-white py-3 rounded-lg font-bold transition-all"
+              className="bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
             >
-              Stop
+              <X className="w-4 h-4" strokeWidth={2} />
+              Stop Therapy
             </button>
           </div>
         </div>
@@ -560,11 +682,82 @@ export default function MainAppScreen({
     );
   }
 
-  // Session summary
+  // Session Recap (Summary)
   if (completedSession) {
+    // Determine phases based on session type
+    const getSessionPhases = () => {
+      if (completedSession.type === 'program' && sessionState.config.segments) {
+        // Program Session: Show original steps
+        return sessionState.config.segments.map((segment, index) => ({
+          id: segment.id,
+          title: `Step ${index + 1}: ${segment.type === 'hot' ? 'Heat' : segment.type === 'cold' ? 'Cold' : 'Pressure'}`,
+          icon: segment.type === 'hot' ? 'fire' : segment.type === 'cold' ? 'snowflake' : 'wind',
+          color: segment.type === 'hot' ? 'text-orange-500' : segment.type === 'cold' ? 'text-blue-500' : 'text-primary',
+          bgColor: segment.type === 'hot' ? 'bg-orange-100' : segment.type === 'cold' ? 'bg-blue-100' : 'bg-primary/10',
+          settings: [
+            segment.temperature ? `${segment.temperature}°C` : null,
+            segment.compressionMode ? segment.compressionMode.charAt(0).toUpperCase() + segment.compressionMode.slice(1) : null,
+            segment.compressionLevel !== undefined ? `Level ${segment.compressionLevel}` : null,
+          ].filter(Boolean).join(' | '),
+          duration: `${segment.duration}:00`,
+        }));
+      } else {
+        // Manual Session: Show continuous mode used
+        const phases = [];
+        const config = completedSession.config;
+        
+        if (config?.treatmentMode === 'cold' || config?.treatmentMode === 'hot') {
+          phases.push({
+            id: 'thermal',
+            title: config.treatmentMode === 'cold' ? 'Cold' : 'Heat',
+            icon: config.treatmentMode === 'cold' ? 'snowflake' : 'fire',
+            color: config.treatmentMode === 'cold' ? 'text-blue-500' : 'text-orange-500',
+            bgColor: config.treatmentMode === 'cold' ? 'bg-blue-100' : 'bg-orange-100',
+            settings: [
+              config.temperature ? `${config.temperature}°C` : null,
+              config.compressionMode ? config.compressionMode.charAt(0).toUpperCase() + config.compressionMode.slice(1) : null,
+              config.compressionLevel !== undefined ? `Level ${config.compressionLevel}` : null,
+            ].filter(Boolean).join(' | '),
+            duration: `${completedSession.duration}:00`,
+          });
+        } else if (config?.treatmentMode === 'compression-only') {
+          phases.push({
+            id: 'pressure',
+            title: 'Pressure',
+            icon: 'wind',
+            color: 'text-primary',
+            bgColor: 'bg-primary/10',
+            settings: [
+              config.compressionMode ? config.compressionMode.charAt(0).toUpperCase() + config.compressionMode.slice(1) : null,
+              config.compressionLevel !== undefined ? `Level ${config.compressionLevel}` : null,
+            ].filter(Boolean).join(' | '),
+            duration: `${completedSession.duration}:00`,
+          });
+        }
+        
+        return phases;
+      }
+    };
+
+    const phases = getSessionPhases();
+
+    const getPhaseIcon = (iconType: string) => {
+      switch (iconType) {
+        case 'fire':
+          return <Thermometer className="w-4 h-4" strokeWidth={2} />;
+        case 'snowflake':
+          return <Thermometer className="w-4 h-4" strokeWidth={2} />;
+        case 'wind':
+          return <Wind className="w-4 h-4" strokeWidth={2} />;
+        default:
+          return <Zap className="w-4 h-4" strokeWidth={2} />;
+      }
+    };
+
     return (
       <div className="min-h-screen bg-gradient-1 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+          {/* Header */}
           <div className="text-center">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
               <CheckCircle2 className="w-8 h-8 text-green-600" strokeWidth={2} />
@@ -573,47 +766,62 @@ export default function MainAppScreen({
             <p className="text-sm text-gray-600">Great work on your recovery session</p>
           </div>
 
+          {/* Program Name & Duration */}
           <div className="space-y-2.5">
             <div className="bg-gray-50 rounded-lg p-3">
               <div className="text-xs text-gray-600 mb-0.5">Program</div>
               <div className="text-base font-semibold text-gray-900">{completedSession.program}</div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="text-xs text-gray-600 mb-0.5">Duration</div>
-                <div className="text-xl font-bold text-primary">{completedSession.duration}m</div>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="text-xs text-gray-600 mb-0.5">Score</div>
-                <div className="text-xl font-bold text-green-600">{completedSession.score}%</div>
-              </div>
+            <div className="bg-gray-50 rounded-lg p-3">
+              <div className="text-xs text-gray-600 mb-0.5">Total Duration</div>
+              <div className="text-xl font-bold text-primary">{completedSession.duration} min</div>
             </div>
-
-            {completedSession.config && (
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="text-xs text-gray-600 mb-1.5">Session Details</div>
-                <div className="space-y-1 text-sm">
-                  {completedSession.config.temperature && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Temperature:</span>
-                      <span className="font-medium text-gray-900">{completedSession.config.temperature}°C</span>
-                    </div>
-                  )}
-                  {completedSession.config.compressionLevel !== undefined && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Compression:</span>
-                      <span className="font-medium text-gray-900">Level {completedSession.config.compressionLevel}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
 
+          {/* Session Recap - Vertical Timeline */}
+          {phases.length > 0 && (
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Session Recap</div>
+              
+              <div className="relative">
+                {/* Vertical Timeline Line */}
+                {phases.length > 1 && (
+                  <div className="absolute left-4 top-6 bottom-6 w-0.5 bg-gray-300"></div>
+                )}
+
+                {/* Phase Items */}
+                <div className="space-y-3">
+                  {phases.map((phase, index) => (
+                    <div key={phase.id} className="relative flex items-start gap-3">
+                      {/* Icon Pillar */}
+                      <div className={`relative z-10 w-8 h-8 rounded-full ${phase.bgColor} flex items-center justify-center flex-shrink-0`}>
+                        <div className={phase.color}>
+                          {getPhaseIcon(phase.icon)}
+                        </div>
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 bg-white rounded-lg p-3 border border-gray-200 shadow-sm">
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <h4 className="text-sm font-semibold text-gray-900">{phase.title}</h4>
+                          <span className="text-sm font-bold text-primary tabular-nums">{phase.duration}</span>
+                        </div>
+                        {phase.settings && (
+                          <p className="text-xs text-gray-600">{phase.settings}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Done Button */}
           <button
             onClick={onCloseSummary}
-            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-2.5 rounded-lg font-semibold transition-all text-sm"
+            className="w-full bg-button-primary hover:opacity-90 text-primary-foreground py-2.5 rounded-lg font-semibold transition-all text-sm shadow-md"
           >
             Done
           </button>
@@ -627,7 +835,7 @@ export default function MainAppScreen({
     <div className="min-h-screen bg-gradient-1 text-foreground pb-20">
       {/* Visitor Welcome Banner */}
       {isVisitorMode && activeTab === 'device' && (
-        <div className="bg-gradient-to-r from-primary to-secondary text-white">
+        <div className="bg-gradient-to-r from-primary to-secondary text-white shadow-lg">
           <div className="max-w-md mx-auto p-4">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -639,7 +847,7 @@ export default function MainAppScreen({
               </div>
               <button
                 onClick={() => setShowConversionModal(true)}
-                className="px-4 py-2 bg-white text-primary rounded-lg text-sm font-semibold hover:bg-white/90 transition-all shadow-md flex-shrink-0"
+                className="px-4 py-2 bg-white text-primary rounded-lg text-sm font-semibold hover:bg-white/95 transition-all shadow-lg hover:shadow-xl flex-shrink-0"
               >
                 Pair Device
               </button>
@@ -650,13 +858,13 @@ export default function MainAppScreen({
 
       {/* Compact Status Strip - Only show on Device tab and NOT in visitor mode */}
       {activeTab === 'device' && !isVisitorMode && (
-        <div className="bg-white border-b border-gray-200 shadow-sm">
+        <div className="bg-white/90 backdrop-blur-md border-b border-gray-200/50 shadow-sm">
           <div className="max-w-md mx-auto p-3">
           {/* Device Info Row */}
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <img 
-                src="https://c.animaapp.com/mjn3exopQqjBGG/img/20250806-1773.png" 
+                src="https://c.animaapp.com/mjnxgqk9obaGxq/img/3covery-prozhu-ji-tou-ming-tu_1.png"
                 alt="3Covery Device"
                 className="w-10 h-10 object-contain"
               />
@@ -673,52 +881,47 @@ export default function MainAppScreen({
             </button>
           </div>
 
-          {/* Status Grid */}
-          <div className="grid grid-cols-3 gap-2 text-xs">
-            {/* Water Level */}
-            <div className="bg-gray-50 rounded-md p-2 border border-gray-200">
-              <div className="flex items-center gap-1 mb-0.5">
-                <Droplet className={`w-3 h-3 ${getWaterLevelColor()}`} strokeWidth={1.5} />
-                <span className="text-gray-600 font-medium">Water</span>
+            {/* Device Status Bar - Horizontal Layout */}
+            <div className="flex items-center gap-3 text-xs pt-2 border-t border-gray-100">
+              {/* Water Level */}
+              <div className="flex items-center gap-1">
+                <Droplet className={`w-3.5 h-3.5 ${getWaterLevelColor()}`} strokeWidth={1.5} />
+                <span className="text-gray-600 font-medium">{getWaterLevelText()}</span>
               </div>
-              <div className={`font-semibold ${getWaterLevelColor()}`}>
-                {getWaterLevelText()}
-              </div>
-            </div>
 
-            {/* Current Temperature */}
-            <div className="bg-gray-50 rounded-md p-2 border border-gray-200">
-              <div className="flex items-center gap-1 mb-0.5">
-                <Thermometer className="w-3 h-3 text-primary" strokeWidth={1.5} />
-                <span className="text-gray-600 font-medium">Temp</span>
-              </div>
-              <div className="font-semibold text-gray-900">
-                {currentTemp}°C
-              </div>
-            </div>
+              {/* Divider */}
+              <div className="w-px h-3 bg-gray-300"></div>
 
-            {/* Connected Accessory */}
-            <div className="bg-gray-50 rounded-md p-2 border border-gray-200">
-              <div className="flex items-center gap-1 mb-0.5">
-                <Link2 className={`w-3 h-3 ${connectedAccessories.length > 0 ? 'text-green-500' : 'text-slate-400'}`} strokeWidth={1.5} />
-                <span className="text-gray-600 font-medium">Accessory</span>
-              </div>
+              {/* Accessory */}
               <div className="flex items-center gap-1">
                 {connectedAccessories.length > 0 ? (
                   <>
-                    <span className="font-semibold text-gray-900 text-xs">
-                      {connectedAccessories[0].name}
-                    </span>
-                    {connectedAccessories[0].chambers > 1 && (
-                      <Signal className="w-3 h-3 text-primary" strokeWidth={1.5} />
-                    )}
+                    {getAccessoryIcon(connectedAccessories[0].icon)}
+                    <span className="text-gray-600 font-medium">{connectedAccessories[0].name}</span>
                   </>
                 ) : (
-                  <span className="font-semibold text-gray-400 text-xs">--</span>
+                  <span className="text-gray-400 font-medium">No Accessory</span>
                 )}
               </div>
+
+              {/* Divider */}
+              <div className="w-px h-3 bg-gray-300"></div>
+
+              {/* Current Temperature */}
+              <div className="flex items-center gap-1">
+                <Thermometer className="w-3.5 h-3.5 text-blue-500" strokeWidth={1.5} />
+                <span className="text-gray-600 font-medium">{currentTemp}°C</span>
+              </div>
+
+              {/* Divider */}
+              <div className="w-px h-3 bg-gray-300"></div>
+
+              {/* Compression Mode & Level */}
+              <div className="flex items-center gap-1">
+                <Wind className="w-3.5 h-3.5 text-primary" strokeWidth={1.5} />
+                <span className="text-gray-600 font-medium">{compressionLevel * 25} mmHg</span>
+              </div>
             </div>
-          </div>
         </div>
         </div>
       )}
@@ -728,23 +931,23 @@ export default function MainAppScreen({
         {activeTab === 'device' && (
           <div className="space-y-3">
             {/* Control Mode Toggle */}
-            <div className="bg-white rounded-lg p-1 border border-gray-200 flex shadow-sm">
+            <div className="bg-white rounded-xl p-1.5 border border-gray-100/50 flex shadow-lg">
               <button
                 onClick={() => setControlMode('preset')}
-                className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+                className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-medium transition-all ${
                   controlMode === 'preset'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-button-primary text-primary-foreground shadow-md'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
               >
-                Preset Programs
+                Program
               </button>
               <button
                 onClick={() => setControlMode('manual')}
-                className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+                className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-medium transition-all ${
                   controlMode === 'manual'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-button-primary text-primary-foreground shadow-md'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
               >
                 Manual Control
@@ -754,38 +957,39 @@ export default function MainAppScreen({
             {/* Preset Programs */}
             {controlMode === 'preset' && (
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-semibold text-gray-900">Recovery Programs</h3>
-                  <button
-                    onClick={() => onNavigate('create-routine')}
-                    className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
-                    title="Create Custom Routine"
-                  >
-                    <Plus className="w-4 h-4 text-primary" strokeWidth={2} />
-                  </button>
-                </div>
-
-                {/* Tab Switcher */}
-                <div className="bg-white rounded-lg p-1 border border-gray-200 flex shadow-sm">
+                {/* Header Row: Tab Switcher + Add Button */}
+                <div className="flex items-center gap-2">
+                  {/* Tab Switcher */}
+                  <div className="flex-1 bg-white rounded-xl p-1.5 border border-gray-100/50 flex shadow-lg">
                   <button
                     onClick={() => setProgramTab('official')}
-                    className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all ${
+                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
                       programTab === 'official'
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
+                        ? 'bg-button-primary text-primary-foreground shadow-md'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                     }`}
                   >
                     Official
                   </button>
+                    <button
+                      onClick={() => setProgramTab('custom')}
+                      className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                        programTab === 'custom'
+                          ? 'bg-button-primary text-primary-foreground shadow-md'
+                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                    >
+                      My Program
+                    </button>
+                  </div>
+
+                  {/* Add Button */}
                   <button
-                    onClick={() => setProgramTab('custom')}
-                    className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all ${
-                      programTab === 'custom'
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
+                    onClick={() => onNavigate('create-routine')}
+                    className="p-2.5 bg-white hover:bg-gray-50 border-2 border-gray-200 hover:border-primary rounded-xl transition-all shadow-lg hover:shadow-xl"
+                    title="Create Custom Routine"
                   >
-                    My Routines
+                    <Plus className="w-5 h-5 text-primary" strokeWidth={2} />
                   </button>
                 </div>
 
@@ -795,7 +999,7 @@ export default function MainAppScreen({
                     {officialPrograms.map((program) => (
                       <div
                         key={program.id}
-                        className="w-full bg-white rounded-lg p-3 border border-gray-200 hover:border-primary hover:shadow-md transition-all group"
+                        className="w-full bg-white rounded-xl p-3 border border-gray-100/50 hover:border-primary/30 hover:shadow-lg transition-all group"
                       >
                         <div className="flex items-center justify-between">
                           <button
@@ -834,7 +1038,7 @@ export default function MainAppScreen({
                 {programTab === 'custom' && (
                   <div className="space-y-2">
                     {customPrograms.length === 0 ? (
-                      <div className="bg-white rounded-lg p-8 border border-gray-200 text-center">
+                      <div className="bg-white rounded-xl p-8 border border-gray-100/50 shadow-lg text-center">
                         <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
                           <BookOpen className="w-8 h-8 text-gray-400" strokeWidth={1.5} />
                         </div>
@@ -846,7 +1050,7 @@ export default function MainAppScreen({
                         </p>
                         <button
                           onClick={() => onNavigate('create-routine')}
-                          className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                          className="bg-button-primary hover:opacity-90 text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-md hover:shadow-lg"
                         >
                           Create First Routine
                         </button>
@@ -855,7 +1059,7 @@ export default function MainAppScreen({
                       customPrograms.map((program) => (
                         <div
                           key={program.id}
-                          className="w-full bg-white rounded-lg p-3 border border-gray-200 hover:border-primary hover:shadow-md transition-all group"
+                          className="w-full bg-white rounded-xl p-3 border border-gray-100/50 hover:border-primary/30 hover:shadow-lg transition-all group"
                         >
                           <div className="flex items-center justify-between">
                             <button
@@ -907,7 +1111,7 @@ export default function MainAppScreen({
                 </div>
                 
                 {/* Treatment Mode Selection - NO LABEL */}
-                <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm">
+                <div className="bg-white rounded-xl p-3 border border-gray-100/50 shadow-lg">
                   <div className="grid grid-cols-3 gap-2">
                     <button
                       onClick={() => {
@@ -915,10 +1119,10 @@ export default function MainAppScreen({
                         setTemperature(10);
                         setDuration(Math.min(duration, 20));
                       }}
-                      className={`p-2 rounded-lg border-2 transition-all ${
+                      className={`p-2 rounded-lg border-2 transition-all shadow-sm ${
                         treatmentMode === 'cold'
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
+                          ? 'border-blue-500 bg-blue-50 shadow-md'
+                          : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
                       }`}
                     >
                       <Thermometer className="w-4 h-4 text-blue-500 mx-auto mb-0.5" strokeWidth={1.5} />
@@ -931,10 +1135,10 @@ export default function MainAppScreen({
                         setTemperature(40);
                         setDuration(Math.min(duration, 30));
                       }}
-                      className={`p-2 rounded-lg border-2 transition-all ${
+                      className={`p-2 rounded-lg border-2 transition-all shadow-sm ${
                         treatmentMode === 'hot'
-                          ? 'border-orange-500 bg-orange-50'
-                          : 'border-gray-200 hover:border-gray-300'
+                          ? 'border-orange-500 bg-orange-50 shadow-md'
+                          : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
                       }`}
                     >
                       <Thermometer className="w-4 h-4 text-orange-500 mx-auto mb-0.5" strokeWidth={1.5} />
@@ -946,10 +1150,10 @@ export default function MainAppScreen({
                         setTreatmentMode('compression-only');
                         setDuration(Math.min(duration, 60));
                       }}
-                      className={`p-2 rounded-lg border-2 transition-all ${
+                      className={`p-2 rounded-lg border-2 transition-all shadow-sm ${
                         treatmentMode === 'compression-only'
-                          ? 'border-primary bg-primary/5'
-                          : 'border-gray-200 hover:border-gray-300'
+                          ? 'border-primary bg-primary/5 shadow-md'
+                          : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
                       }`}
                     >
                       <Wind className="w-4 h-4 text-primary mx-auto mb-0.5" strokeWidth={1.5} />
@@ -958,33 +1162,9 @@ export default function MainAppScreen({
                   </div>
                 </div>
 
-                {/* Duration Control */}
-                <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-1.5">
-                      <Clock className="w-4 h-4 text-primary" strokeWidth={1.5} />
-                      <span className="text-xs font-medium text-gray-700">Duration</span>
-                    </div>
-                    <span className="text-base font-semibold text-primary">{duration} min</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="5"
-                    max={getMaxDuration()}
-                    step="5"
-                    value={Math.min(duration, getMaxDuration())}
-                    onChange={(e) => setDuration(Number(e.target.value))}
-                    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
-                  />
-                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                    <span>5 min</span>
-                    <span>{getMaxDuration()} min</span>
-                  </div>
-                </div>
-
-                {/* Temperature Control */}
+                {/* Temperature Control - MOVED TO TOP */}
                 {showTemperature && (
-                  <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm">
+                  <div className="bg-white rounded-xl p-3 border border-gray-100/50 shadow-lg">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-1.5">
                         <Thermometer className={`w-4 h-4 ${treatmentMode === 'cold' ? 'text-blue-500' : 'text-orange-500'}`} strokeWidth={1.5} />
@@ -1013,7 +1193,7 @@ export default function MainAppScreen({
 
                 {/* Compression Controls */}
                 {showCompression && (
-                  <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm">
+                  <div className="bg-white rounded-xl p-3 border border-gray-100/50 shadow-lg">
                     <div className="flex items-center gap-1.5 mb-2">
                       <Wind className="w-4 h-4 text-primary" strokeWidth={1.5} />
                       <span className="text-xs font-medium text-gray-700">Compression</span>
@@ -1026,9 +1206,9 @@ export default function MainAppScreen({
                         {/* Static Mode - Overall */}
                         <button
                           onClick={() => setCompressionMode('overall')}
-                          className={`flex-1 py-1.5 px-2 rounded text-xs font-medium transition-all ${
+                          className={`flex-1 py-1.5 px-2 rounded text-xs font-medium transition-all shadow-sm ${
                             compressionMode === 'overall'
-                              ? 'bg-primary text-white'
+                              ? 'bg-primary text-white shadow-md'
                               : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                           }`}
                         >
@@ -1042,9 +1222,9 @@ export default function MainAppScreen({
                         <div className="flex-[2] grid grid-cols-3 gap-1.5">
                           <button
                             onClick={() => setCompressionMode('flow')}
-                            className={`py-1.5 px-2 rounded text-xs font-medium transition-all ${
+                            className={`py-1.5 px-2 rounded text-xs font-medium transition-all shadow-sm ${
                               compressionMode === 'flow'
-                                ? 'bg-primary text-white'
+                                ? 'bg-primary text-white shadow-md'
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                           >
@@ -1052,9 +1232,9 @@ export default function MainAppScreen({
                           </button>
                           <button
                             onClick={() => setCompressionMode('wave')}
-                            className={`py-1.5 px-2 rounded text-xs font-medium transition-all ${
+                            className={`py-1.5 px-2 rounded text-xs font-medium transition-all shadow-sm ${
                               compressionMode === 'wave'
-                                ? 'bg-primary text-white'
+                                ? 'bg-primary text-white shadow-md'
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                           >
@@ -1062,9 +1242,9 @@ export default function MainAppScreen({
                           </button>
                           <button
                             onClick={() => setCompressionMode('custom')}
-                            className={`py-1.5 px-2 rounded text-xs font-medium transition-all ${
+                            className={`py-1.5 px-2 rounded text-xs font-medium transition-all shadow-sm ${
                               compressionMode === 'custom'
-                                ? 'bg-primary text-white'
+                                ? 'bg-primary text-white shadow-md'
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                           >
@@ -1086,7 +1266,7 @@ export default function MainAppScreen({
                             <button
                               key={level}
                               onClick={() => setCompressionLevel(level)}
-                              className={`py-2 rounded border-2 transition-all text-xs font-semibold ${
+                              className={`py-2 rounded border-2 transition-all text-xs font-semibold shadow-sm hover:shadow-md ${
                                 compressionLevel === level
                                   ? `${colors.border} ${colors.bg} ${colors.text}`
                                   : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300'
@@ -1101,83 +1281,43 @@ export default function MainAppScreen({
                   </div>
                 )}
 
-                {/* Start Button */}
-                <button 
-                  onClick={handleStartManualSession}
-                  className={`w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 shadow-md ${
-                    isVisitorMode ? 'relative' : ''
-                  }`}
-                >
-                  {isVisitorMode && (
-                    <Lock className="w-4 h-4" strokeWidth={2} />
-                  )}
-                  {!isVisitorMode && <Play className="w-4 h-4" strokeWidth={2} />}
-                  {isVisitorMode ? 'Start (Requires Device)' : 'Start Treatment'}
-                </button>
+                {/* Duration Control */}
+                <div className="bg-white rounded-xl p-3 border border-gray-100/50 shadow-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 text-primary" strokeWidth={1.5} />
+                      <span className="text-xs font-medium text-gray-700">Duration</span>
+                    </div>
+                    <span className="text-base font-semibold text-primary">{duration} min</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="5"
+                    max={getMaxDuration()}
+                    step="5"
+                    value={Math.min(duration, getMaxDuration())}
+                    onChange={(e) => setDuration(Number(e.target.value))}
+                    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                  />
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>5 min</span>
+                    <span>{getMaxDuration()} min</span>
+                  </div>
+                </div>
+
+                {/* Add bottom padding to prevent content from being hidden behind fixed button */}
+                <div className="h-20"></div>
               </div>
             )}
           </div>
         )}
 
         {activeTab === 'data' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Session History</h2>
-                <p className="text-sm text-gray-600 mt-1">Your recovery journey</p>
-              </div>
-              {isVisitorMode && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 rounded-full">
-                  <span className="text-xs font-semibold text-primary">📊 Sample Data</span>
-                </div>
-              )}
-            </div>
-
-            {isVisitorMode && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <p className="text-sm text-blue-900">
-                  <strong>Demo Mode:</strong> Showing sample data. Connect your device to track your actual recovery stats.
-                </p>
-              </div>
-            )}
-
-            {displayHistory.length === 0 ? (
-              <div className="text-center py-12">
-                <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" strokeWidth={1.5} />
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">No sessions yet</h3>
-                <p className="text-gray-500">Start your first recovery session</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {displayHistory.map((record) => (
-                  <div
-                    key={record.id}
-                    className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${record.type === 'program' ? 'bg-primary' : 'bg-green-500'}`}></div>
-                        <h4 className="text-sm font-semibold text-gray-900">{record.program}</h4>
-                      </div>
-                      <span className="text-xs text-gray-500">
-                        {new Date(record.date).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-4 text-sm">
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
-                        <span className="text-gray-600">{record.duration} min</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <CheckCircle2 className="w-4 h-4 text-green-500" strokeWidth={1.5} />
-                        <span className="text-gray-600">{record.score}% complete</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <DataContent 
+            displayHistory={displayHistory}
+            isVisitorMode={isVisitorMode}
+            onViewDetails={(record) => setSelectedSessionRecord(record)}
+          />
         )}
 
         {activeTab === 'learn' && (
@@ -1187,7 +1327,7 @@ export default function MainAppScreen({
         {activeTab === 'my' && (
           <div className="space-y-4">
             {/* Compact Header Section */}
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+            <div className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100/50">
               <div className="flex items-center gap-3">
                 {/* Avatar */}
                 <div className="relative flex-shrink-0">
@@ -1218,10 +1358,10 @@ export default function MainAppScreen({
               </div>
             </div>
 
-            {/* Account Group */}
+            {/* Main Menu */}
             {subPage === 'main' && (
               <>
-                <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="bg-white rounded-3xl shadow-lg border border-gray-100/50 overflow-hidden">
                   <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
                     <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Account</h3>
                   </div>
@@ -1270,7 +1410,7 @@ export default function MainAppScreen({
                 </div>
 
                 {/* Support Group */}
-                <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="bg-white rounded-3xl shadow-lg border border-gray-100/50 overflow-hidden">
                   <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
                     <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Support</h3>
                   </div>
@@ -1316,7 +1456,10 @@ export default function MainAppScreen({
                 </div>
 
                 {/* Logout Button */}
-                <button className="w-full bg-red-50 hover:bg-red-100 rounded-3xl py-4 transition-colors border border-red-100">
+                <button 
+                  onClick={() => onNavigate('login')}
+                  className="w-full bg-red-50 hover:bg-red-100 rounded-3xl py-4 transition-colors border border-red-100"
+                >
                   <span className="text-sm font-semibold text-red-500">Log Out</span>
                 </button>
 
@@ -1327,13 +1470,338 @@ export default function MainAppScreen({
               </>
             )}
 
-            {/* Sub-pages would go here - keeping them as is */}
+            {/* Account Details Sub-page */}
+            {subPage === 'account' && (
+              <div className="space-y-4">
+                <button
+                  onClick={() => setSubPage('main')}
+                  className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5" strokeWidth={1.5} />
+                  <span className="text-sm font-medium">Back</span>
+                </button>
+
+                <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100/50">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">Account Details</h3>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-2">Full Name</label>
+                      <input
+                        type="text"
+                        value={userName}
+                        onChange={(e) => setUserName(e.target.value)}
+                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-2">Email</label>
+                      <input
+                        type="email"
+                        value="john.doe@example.com"
+                        disabled
+                        className="w-full px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-500 cursor-not-allowed"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-2">Member Since</label>
+                      <input
+                        type="text"
+                        value="January 2024"
+                        disabled
+                        className="w-full px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-500 cursor-not-allowed"
+                      />
+                    </div>
+
+                    <button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 rounded-lg font-semibold transition-all shadow-md">
+                      Save Changes
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* My Devices Sub-page */}
+            {subPage === 'devices' && (
+              <div className="space-y-4">
+                <button
+                  onClick={() => setSubPage('main')}
+                  className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5" strokeWidth={1.5} />
+                  <span className="text-sm font-medium">Back</span>
+                </button>
+
+                <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100/50">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">My Devices</h3>
+                  
+                  <div className="space-y-3">
+                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                      <div className="flex items-center gap-3 mb-3">
+                        <img 
+                          src="https://c.animaapp.com/mjnxgqk9obaGxq/img/3covery-prozhu-ji-tou-ming-tu_1.png"
+                          alt="3Covery Device"
+                          className="w-12 h-12 object-contain"
+                        />
+                        <div className="flex-1">
+                          <h4 className="text-sm font-semibold text-gray-900">3Covery Pro</h4>
+                          <p className="text-xs text-gray-500 font-mono">SN001234</p>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                          <span className="text-xs font-medium text-success">Connected</span>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="bg-white rounded-lg p-2">
+                          <span className="text-gray-600">Firmware</span>
+                          <p className="font-semibold text-gray-900 mt-0.5">v2.1.0</p>
+                        </div>
+                        <div className="bg-white rounded-lg p-2">
+                          <span className="text-gray-600">Last Sync</span>
+                          <p className="font-semibold text-gray-900 mt-0.5">Just now</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button className="w-full bg-primary/10 hover:bg-primary/20 text-primary py-3 rounded-lg font-semibold transition-all">
+                      + Add New Device
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* App Preferences Sub-page */}
+            {subPage === 'preferences' && (
+              <div className="space-y-4">
+                <button
+                  onClick={() => setSubPage('main')}
+                  className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5" strokeWidth={1.5} />
+                  <span className="text-sm font-medium">Back</span>
+                </button>
+
+                <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100/50">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">App Preferences</h3>
+                  
+                  <div className="space-y-4">
+                    {/* Temperature Unit */}
+                    <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-900">Temperature Unit</h4>
+                        <p className="text-xs text-gray-500 mt-0.5">Display preference</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setTemperatureUnit('C')}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                            temperatureUnit === 'C'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          °C
+                        </button>
+                        <button
+                          onClick={() => setTemperatureUnit('F')}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                            temperatureUnit === 'F'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          °F
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Language */}
+                    <div className="flex items-center justify-between py-3">
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-900">Language</h4>
+                        <p className="text-xs text-gray-500 mt-0.5">App language</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setLanguage('en')}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                            language === 'en'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          English
+                        </button>
+                        <button
+                          onClick={() => setLanguage('zh')}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                            language === 'zh'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          中文
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Help & Support Sub-page */}
+            {subPage === 'support' && (
+              <div className="space-y-4">
+                <button
+                  onClick={() => setSubPage('main')}
+                  className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5" strokeWidth={1.5} />
+                  <span className="text-sm font-medium">Back</span>
+                </button>
+
+                <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100/50">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">Help & Support</h3>
+                  
+                  <div className="space-y-3">
+                    <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+                      <h4 className="text-sm font-semibold text-gray-900">Getting Started Guide</h4>
+                      <p className="text-xs text-gray-500 mt-0.5">Learn the basics</p>
+                    </button>
+
+                    <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+                      <h4 className="text-sm font-semibold text-gray-900">FAQs</h4>
+                      <p className="text-xs text-gray-500 mt-0.5">Common questions answered</p>
+                    </button>
+
+                    <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+                      <h4 className="text-sm font-semibold text-gray-900">Contact Support</h4>
+                      <p className="text-xs text-gray-500 mt-0.5">Get help from our team</p>
+                    </button>
+
+                    <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+                      <h4 className="text-sm font-semibold text-gray-900">Video Tutorials</h4>
+                      <p className="text-xs text-gray-500 mt-0.5">Watch how-to videos</p>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Send Feedback Sub-page */}
+            {subPage === 'feedback' && (
+              <div className="space-y-4">
+                <button
+                  onClick={() => setSubPage('main')}
+                  className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5" strokeWidth={1.5} />
+                  <span className="text-sm font-medium">Back</span>
+                </button>
+
+                <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100/50">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">Send Feedback</h3>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-2">Feedback Type</label>
+                      <select className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <option>Bug Report</option>
+                        <option>Feature Request</option>
+                        <option>General Feedback</option>
+                        <option>Compliment</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-2">Your Message</label>
+                      <textarea
+                        rows={6}
+                        placeholder="Tell us what you think..."
+                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+                      />
+                    </div>
+
+                    <button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground py-3 rounded-lg font-semibold transition-all shadow-md">
+                      Submit Feedback
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Privacy & Data Sub-page */}
+            {subPage === 'privacy' && (
+              <div className="space-y-4">
+                <button
+                  onClick={() => setSubPage('main')}
+                  className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors"
+                >
+                  <ArrowLeft className="w-5 h-5" strokeWidth={1.5} />
+                  <span className="text-sm font-medium">Back</span>
+                </button>
+
+                <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100/50">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">Privacy & Data</h3>
+                  
+                  <div className="space-y-4">
+                    <div className="pb-4 border-b border-gray-100">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-2">Data Collection</h4>
+                      <p className="text-xs text-gray-600 leading-relaxed">
+                        We collect session data to help you track your recovery progress. All data is encrypted and stored securely.
+                      </p>
+                    </div>
+
+                    <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+                      <h4 className="text-sm font-semibold text-gray-900">Privacy Policy</h4>
+                      <p className="text-xs text-gray-500 mt-0.5">Read our full policy</p>
+                    </button>
+
+                    <button className="w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+                      <h4 className="text-sm font-semibold text-gray-900">Terms of Service</h4>
+                      <p className="text-xs text-gray-500 mt-0.5">View terms and conditions</p>
+                    </button>
+
+
+                    <button className="w-full text-left px-4 py-3 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-200">
+                      <h4 className="text-sm font-semibold text-red-600">Delete My Account</h4>
+                      <p className="text-xs text-red-500 mt-0.5">Permanently remove all data</p>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
 
+      {/* Fixed Start Button - Only show in Manual Control mode */}
+      {activeTab === 'device' && controlMode === 'manual' && (
+        <div className="fixed bottom-[72px] left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200/50 shadow-2xl z-40">
+          <div className="max-w-md mx-auto px-4 py-3">
+            <button 
+              onClick={handleStartManualSession}
+              className={`w-full bg-button-primary hover:opacity-90 text-primary-foreground py-3.5 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-lg hover:shadow-xl ${
+                isVisitorMode ? 'relative' : ''
+              }`}
+            >
+              {isVisitorMode && (
+                <Lock className="w-4 h-4" strokeWidth={2} />
+              )}
+              {!isVisitorMode && <Play className="w-4 h-4" strokeWidth={2} />}
+              {isVisitorMode ? 'Start (Requires Device)' : 'Start Treatment'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200/50 shadow-2xl z-50">
         <div className="max-w-md mx-auto flex items-center justify-around py-2">
           <button
             onClick={() => setActiveTab('device')}
@@ -1382,6 +1850,13 @@ export default function MainAppScreen({
         isOpen={showConversionModal}
         onClose={() => setShowConversionModal(false)}
         onPairDevice={handlePairDevice}
+      />
+
+      {/* Session Detail Modal */}
+      <SessionDetailModal
+        isOpen={!!selectedSessionRecord}
+        session={selectedSessionRecord}
+        onClose={() => setSelectedSessionRecord(null)}
       />
 
       {/* Global AI Copilot */}

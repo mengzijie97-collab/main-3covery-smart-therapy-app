@@ -63,9 +63,13 @@ module.exports = {
         '32': '8rem',
       },
       backgroundImage: {
-        'gradient-1': 'linear-gradient(135deg, hsl(0, 0%, 98%) 0%, hsl(210, 20%, 96%) 100%)',
+        'gradient-1': 'linear-gradient(135deg, hsl(220, 15%, 98%) 0%, hsl(220, 20%, 96%) 100%)',
         'gradient-2': 'linear-gradient(145deg, hsl(215, 80%, 52%) 0%, hsl(195, 85%, 62%) 100%)',
+        'gradient-primary': 'linear-gradient(135deg, hsl(215, 90%, 54%) 0%, hsl(215, 85%, 48%) 100%)',
         'button-border-gradient': 'linear-gradient(90deg, hsla(215, 95%, 65%, 0.8), hsla(195, 90%, 70%, 0.8))',
+        'card-subtle': 'linear-gradient(145deg, hsl(0, 0%, 100%) 0%, hsl(220, 20%, 99%) 100%)',
+        'button-primary': 'linear-gradient(135deg, hsl(215, 90%, 54%) 0%, hsl(215, 85%, 48%) 100%)',
+        'button-secondary': 'linear-gradient(135deg, hsl(220, 15%, 98%) 0%, hsl(220, 10%, 94%) 100%)',
       },
       keyframes: {
         "pulse-glow": {

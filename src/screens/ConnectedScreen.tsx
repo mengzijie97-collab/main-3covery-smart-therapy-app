@@ -26,7 +26,7 @@ export default function ConnectedScreen({ onNavigate }: ConnectedScreenProps) {
           <div className="bg-white/5 backdrop-blur-sm rounded-lg p-6 border border-white/10">
             <div className="flex items-center gap-4">
               <img 
-                src="https://c.animaapp.com/mjn3exopQqjBGG/img/20250806-1773.png" 
+                src="https://c.animaapp.com/mjnxgqk9obaGxq/img/3covery-prozhu-ji-tou-ming-tu_1.png"
                 alt="3Covery Device"
                 className="w-20 h-20 object-contain"
               />

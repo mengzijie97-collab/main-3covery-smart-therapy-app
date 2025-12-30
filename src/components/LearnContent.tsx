@@ -108,10 +108,11 @@ export default function LearnContent({ onNavigate }: LearnContentProps) {
         ))}
       </div>
 
-      {/* Featured Card */}
+      {/* Featured Card - 16:9 Aspect Ratio */}
       {featuredArticle && selectedCategory === 'all' && (
         <div
           className="relative bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl overflow-hidden cursor-pointer group"
+          style={{ aspectRatio: '16 / 9' }}
           onClick={() => onNavigate('article-detail')}
         >
           {/* Background Pattern */}
@@ -120,23 +121,25 @@ export default function LearnContent({ onNavigate }: LearnContentProps) {
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-secondary rounded-full blur-3xl"></div>
           </div>
 
-          <div className="relative p-6 space-y-3">
-            <div className="inline-block px-3 py-1 bg-primary/20 backdrop-blur-sm rounded-full">
+          <div className="relative p-4 h-full flex flex-col justify-between">
+            <div className="inline-block px-3 py-1 bg-primary/20 backdrop-blur-sm rounded-full self-start">
               <span className="text-xs font-semibold text-primary-foreground">FEATURED</span>
             </div>
 
-            <h3 className="text-xl font-bold text-white group-hover:text-primary transition-colors">
-              {featuredArticle.title}
-            </h3>
+            <div className="space-y-2">
+              <h3 className="text-lg font-bold text-white group-hover:text-primary transition-colors line-clamp-2">
+                {featuredArticle.title}
+              </h3>
 
-            <p className="text-sm text-gray-300 leading-relaxed">
-              {featuredArticle.description}
-            </p>
+              <p className="text-xs text-gray-300 leading-relaxed line-clamp-2">
+                {featuredArticle.description}
+              </p>
 
-            <button className="inline-flex items-center gap-2 px-4 py-2 bg-white text-gray-900 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
-              Read Article
-              <ChevronRight className="w-4 h-4" strokeWidth={2} />
-            </button>
+              <button className="inline-flex items-center gap-2 px-3 py-1.5 bg-white text-gray-900 rounded-lg text-xs font-medium hover:bg-gray-100 transition-colors">
+                Read Article
+                <ChevronRight className="w-3.5 h-3.5" strokeWidth={2} />
+              </button>
+            </div>
           </div>
         </div>
       )}
